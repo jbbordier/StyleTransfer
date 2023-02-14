@@ -1,0 +1,47 @@
+# content loss is a weighted representation of content distance (diff between content img and content in modified img) for individual
+# layer the function takes the features map F(XL) of layer L in a network processing input X and return the weigthed content distance : Wcl.Dlc(X,C) between input image X and content
+# C. The feature map of Content image must be known, so it willbe the parameter
+# ||F(XL) - F(CL)||² is the mean square error  between the two set of features maps which is nn.MSELoss in torch.nn module
+import torch
+from torch import nn
+import torch.nn.functional as F
+
+
+class ContentLoss(nn.Module):
+    def __init__(self, target, ):
+        super(ContentLoss, self).__init__()
+        # we 'detach' the target content from the tree used
+        # to dynamically compute the gradient: this is a stated value,
+        # not a variable. Otherwise the forward method of the criterion
+        # will throw an error.
+        self.target = target.detach()
+
+    def forward(self, input):
+        self.loss = F.mse_loss(input, self.target)
+        return input
+
+
+def gram_matrix(input):
+    a, b, c, d = input.size()  # a = batch size (=1)
+    # b number of features maps
+    # (c,d) dimensions of a f map (N = c*d)
+
+    features = input.view(a * b, c * d)  # resize F_XL into \hat F_XL
+
+    G = torch.mm(features, features.t())  # compute the gram matrix
+
+    # we 'normalize' the values of the gram matrix
+    # by dividing by the number of element in each feature maps.
+    return G.div(a * b * c * d)
+
+
+class StyleLoss(nn.Module):
+
+    def __init__(self, target_feature):
+        super(StyleLoss, self).__init__()
+        self.target = gram_matrix(target_feature).detach()
+
+    def forward(self, input):
+        G = gram_matrix(input)
+        self.loss = F.mse_loss(G, self.target)
+        return input
